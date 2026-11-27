@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kalender</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<style>
+  :root {
+    --bg:#f6f7fb; --card:#ffffff; --text:#1c1f2a; --muted:#8a90a2; --line:#e8eaf1;
+    --accent:#4f46e5; --accent-text:#ffffff; --soft:#eef0ff; --weekend:#e11d48;
+    --cuti:#ea580c;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0f1117; --card:#181b24; --text:#eef0f6; --muted:#7d8398; --line:#262a36;
+      --accent:#818cf8; --accent-text:#0f1117; --soft:#232647; --weekend:#fb7185;
+      --cuti:#fb923c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f1117; --card:#181b24; --text:#eef0f6; --muted:#7d8398; --line:#262a36;
+    --accent:#818cf8; --accent-text:#0f1117; --soft:#232647; --weekend:#fb7185;
+    --cuti:#fb923c;
+    color-scheme: dark;
+  }
+  html, body { margin:0; background:var(--bg); color:var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent; }
+  button { font-family: inherit; }
+  .cell:active { transform: scale(.92); }
+  .list-item:active { opacity: .55; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const { useState, useRef } = React;
+const h = React.createElement;
+
+const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const BULAN_PENDEK = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+const HARI = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+const HARI_PENDEK = ["Min","Sen","Sel","Rab","Kam","Jum","Sab"];
+
+/* ============================================================
+   DATA HARI BESAR
+   jenis: "libur"       -> Libur Nasional (tanggal merah)
+          "cuti"        -> Cuti Bersama (tanggal merah khusus)
+          "peringatan"  -> Hari besar / peringatan (bukan hari libur)
+   Format entri: [bulan(1-12), tanggal, nama, jenis]
+   ============================================================ */
+
+const HARI_LIBUR = {
+  2024: [
+    [1, 1,  "Tahun Baru 2024 Masehi", "libur"],
+    [2, 8,  "Isra Mikraj Nabi Muhammad SAW", "libur"],
+    [2, 9,  "Cuti Bersama Tahun Baru Imlek", "cuti"],
+    [2, 10, "Tahun Baru Imlek 2575 Kongzili", "libur"],
+    [3, 10, "Hari Suci Nyepi (Tahun Baru Saka 1946)", "libur"],
+    [3, 11, "Cuti Bersama Hari Suci Nyepi", "cuti"],
+    [3, 29, "Wafat Isa Al Masih", "libur"],
+    [3, 31, "Hari Paskah", "peringatan"],
+    [4, 8,  "Cuti Bersama Idul Fitri 1445 H", "cuti"],
+    [4, 9,  "Cuti Bersama Idul Fitri 1445 H", "cuti"],
+    [4, 10, "Hari Raya Idul Fitri 1445 H", "libur"],
+    [4, 11, "Hari Raya Idul Fitri 1445 H (Hari Kedua)", "libur"],
+    [4, 12, "Cuti Bersama Idul Fitri 1445 H", "cuti"],
+    [4, 15, "Cuti Bersama Idul Fitri 1445 H", "cuti"],
+    [5, 1,  "Hari Buruh Internasional", "libur"],
+    [5, 9,  "Kenaikan Isa Al Masih", "libur"],
+    [5, 10, "Cuti Bersama Kenaikan Isa Al Masih", "cuti"],
+    [5, 23, "Hari Raya Waisak 2568 BE", "libur"],
+    [5, 24, "Cuti Bersama Hari Raya Waisak", "cuti"],
+    [6, 1,  "Hari Lahir Pancasila", "libur"],
+    [6, 17, "Hari Raya Idul Adha 1445 H", "libur"],
+    [6, 18, "Cuti Bersama Idul Adha 1445 H", "cuti"],
+    [7, 7,  "Tahun Baru Islam 1446 H", "libur"],
+    [8, 17, "Hari Kemerdekaan Republik Indonesia", "libur"],
+    [9, 16, "Maulid Nabi Muhammad SAW", "libur"],
+    [12, 24, "Cuti Bersama Hari Raya Natal", "cuti"],
+    [12, 25, "Hari Raya Natal", "libur"],
+    [12, 26, "Cuti Bersama Hari Raya Natal", "cuti"]
+  ],
+  2025: [
+    [1, 1,  "Tahun Baru 2025 Masehi", "libur"],
+    [1, 27, "Isra Mikraj Nabi Muhammad SAW", "libur"],
+    [1, 28, "Cuti Bersama Tahun Baru Imlek", "cuti"],
+    [1, 29, "Tahun Baru Imlek 2576 Kongzili", "libur"],
+    [3, 29, "Hari Suci Nyepi (Tahun Baru Saka 1947)", "libur"],
+    [3, 31, "Hari Raya Idul Fitri 1446 H", "libur"],
+    [4, 1,  "Hari Raya Idul Fitri 1446 H (Hari Kedua)", "libur"],
+    [4, 2,  "Cuti Bersama Idul Fitri 1446 H", "cuti"],
+    [4, 3,  "Cuti Bersama Idul Fitri 1446 H", "cuti"],
+    [4, 4,  "Cuti Bersama Idul Fitri 1446 H", "cuti"],
+    [4, 7,  "Cuti Bersama Idul Fitri 1446 H", "cuti"],
+    [4, 18, "Wafat Isa Al Masih", "libur"],
+    [4, 20, "Hari Paskah", "peringatan"],
+    [5, 1,  "Hari Buruh Internasional", "libur"],
+    [5, 12, "Hari Raya Waisak 2569 BE", "libur"],
+    [5, 13, "Cuti Bersama Hari Raya Waisak", "cuti"],
+    [5, 29, "Kenaikan Isa Al Masih", "libur"],
+    [5, 30, "Cuti Bersama Kenaikan Isa Al Masih", "cuti"],
+    [6, 1,  "Hari Lahir Pancasila", "libur"],
+    [6, 6,  "Hari Raya Idul Adha 1446 H", "libur"],
+    [6, 9,  "Cuti Bersama Idul Adha 1446 H", "cuti"],
+    [6, 27, "Tahun Baru Islam 1447 H", "libur"],
+    [8, 17, "Hari Kemerdekaan Republik Indonesia", "libur"],
+    [9, 5,  "Maulid Nabi Muhammad SAW", "libur"],
+    [12, 25, "Hari Raya Natal", "libur"],
+    [12, 26, "Cuti Bersama Hari Raya Natal", "cuti"]
+  ],
+  2026: [
+    [1, 1,  "Tahun Baru 2026 Masehi", "libur"],
+    [1, 16, "Isra Mikraj Nabi Muhammad SAW", "libur"],
+    [2, 17, "Tahun Baru Imlek 2577 Kongzili", "libur"],
+    [3, 19, "Hari Suci Nyepi (Tahun Baru Saka 1948)", "libur"],
+    [3, 20, "Hari Raya Idul Fitri 1447 H", "libur"],
+    [3, 21, "Hari Raya Idul Fitri 1447 H (Hari Kedua)", "libur"],
+    [4, 3,  "Wafat Isa Al Masih", "libur"],
+    [4, 5,  "Hari Paskah", "peringatan"],
+    [5, 1,  "Hari Buruh Internasional", "libur"],
+    [5, 14, "Kenaikan Isa Al Masih", "libur"],
+    [5, 27, "Hari Raya Idul Adha 1447 H", "libur"],
+    [5, 31, "Hari Raya Waisak 2570 BE", "libur"],
+    [6, 1,  "Hari Lahir Pancasila", "libur"],
+    [6, 16, "Tahun Baru Islam 1448 H", "libur"],
+    [8, 17, "Hari Kemerdekaan Republik Indonesia", "libur"],
+    [8, 25, "Maulid Nabi Muhammad SAW", "libur"],
+    [12, 25, "Hari Raya Natal", "libur"]
+  ]
+};
+
+/* Hari besar / peringatan nasional yang tanggalnya tetap setiap tahun */
+const PERINGATAN_TETAP = [
+  [1, 3,  "Hari Amal Bakti Kementerian Agama"],
+  [1, 5,  "Hari Korps Wanita Angkatan Laut (KOWAL)"],
+  [1, 10, "Hari Gerakan Satu Juta Pohon / Hari Lingkungan Hidup Indonesia"],
+  [1, 15, "Hari Dharma Samudera"],
+  [1, 25, "Hari Gizi Nasional"],
+  [2, 9,  "Hari Pers Nasional"],
+  [2, 21, "Hari Bahasa Ibu Internasional"],
+  [3, 1,  "Hari Penegakan Kedaulatan Negara"],
+  [3, 6,  "Hari Komando Strategis Angkatan Darat (Kostrad)"],
+  [3, 8,  "Hari Perempuan Internasional"],
+  [3, 9,  "Hari Musik Nasional"],
+  [3, 21, "Hari Puisi Sedunia & Hari Hutan Sedunia"],
+  [3, 22, "Hari Air Sedunia"],
+  [3, 23, "Hari Meteorologi Sedunia"],
+  [3, 24, "Hari Tuberkulosis Sedunia"],
+  [4, 6,  "Hari Nelayan Indonesia"],
+  [4, 9,  "Hari TNI Angkatan Udara"],
+  [4, 19, "Hari Pertahanan Sipil (Hansip)"],
+  [4, 21, "Hari Kartini"],
+  [4, 22, "Hari Bumi"],
+  [4, 23, "Hari Buku Sedunia"],
+  [4, 28, "Hari Puisi Nasional"],
+  [5, 2,  "Hari Pendidikan Nasional"],
+  [5, 5,  "Hari Lembaga Sosial Desa"],
+  [5, 20, "Hari Kebangkitan Nasional"],
+  [5, 21, "Hari Reformasi"],
+  [6, 5,  "Hari Lingkungan Hidup Sedunia"],
+  [6, 22, "Hari Ulang Tahun Kota Jakarta"],
+  [6, 24, "Hari Bidan Nasional"],
+  [6, 29, "Hari Keluarga Berencana Nasional"],
+  [7, 1,  "Hari Bhayangkara (Kepolisian RI)"],
+  [7, 12, "Hari Koperasi Indonesia"],
+  [7, 22, "Hari Kejaksaan Republik Indonesia"],
+  [7, 23, "Hari Anak Nasional"],
+  [7, 24, "Hari Kebaya Nasional"],
+  [8, 10, "Hari Veteran Nasional"],
+  [8, 14, "Hari Pramuka"],
+  [8, 18, "Hari Konstitusi Republik Indonesia"],
+  [8, 21, "Hari Maritim Nasional"],
+  [9, 1,  "Hari Polisi Wanita (Polwan)"],
+  [9, 8,  "Hari Aksara Internasional"],
+  [9, 9,  "Hari Olahraga Nasional"],
+  [9, 11, "Hari Radio Republik Indonesia"],
+  [9, 14, "Hari Kunjung Perpustakaan"],
+  [9, 17, "Hari Palang Merah Nasional"],
+  [9, 21, "Hari Perdamaian Dunia"],
+  [9, 24, "Hari Tani Nasional"],
+  [9, 28, "Hari Kereta Api Indonesia"],
+  [10, 1, "Hari Kesaktian Pancasila"],
+  [10, 2, "Hari Batik Nasional"],
+  [10, 5, "Hari Tentara Nasional Indonesia"],
+  [10, 16, "Hari Parlemen Indonesia & Hari Pangan Sedunia"],
+  [10, 22, "Hari Santri Nasional"],
+  [10, 24, "Hari Dokter Nasional"],
+  [10, 28, "Hari Sumpah Pemuda"],
+  [11, 5, "Hari Cinta Puspa dan Satwa Nasional"],
+  [11, 10, "Hari Pahlawan"],
+  [11, 12, "Hari Kesehatan Nasional"],
+  [11, 25, "Hari Guru Nasional"],
+  [11, 28, "Hari Menanam Pohon Indonesia"],
+  [12, 1, "Hari AIDS Sedunia"],
+  [12, 3, "Hari Penyandang Disabilitas Internasional"],
+  [12, 9, "Hari Anti Korupsi Sedunia"],
+  [12, 13, "Hari Nusantara"],
+  [12, 15, "Hari Juang Kartika TNI AD"],
+  [12, 19, "Hari Bela Negara"],
+  [12, 22, "Hari Ibu"]
+];
+
+/* ---------- Indeks tanggal ---------- */
+const petaLibur = {};
+Object.keys(HARI_LIBUR).forEach(y => {
+  HARI_LIBUR[y].forEach(([m, d, n, t]) => {
+    const k = y + "-" + m + "-" + d;
+    (petaLibur[k] = petaLibur[k] || []).push({ nama: n, jenis: t });
+  });
+});
+
+const petaPeringatan = {};
+PERINGATAN_TETAP.forEach(([m, d, n]) => {
+  const k = m + "-" + d;
+  (petaPeringatan[k] = petaPeringatan[k] || []).push({ nama: n, jenis: "peringatan" });
+});
+
+function hariBesar(d) {
+  const a = petaLibur[d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate()] || [];
+  const b = petaPeringatan[(d.getMonth() + 1) + "-" + d.getDate()] || [];
+  return a.concat(b);
+}
+const warnaJenis = t =>
+  t === "libur" ? "var(--weekend)" : t === "cuti" ? "var(--cuti)" : "var(--accent)";
+const labelJenis = t =>
+  t === "libur" ? "Libur Nasional" : t === "cuti" ? "Cuti Bersama" : "Hari Besar / Peringatan";
+const urutanJenis = t => (t === "libur" ? 0 : t === "cuti" ? 1 : 2);
+
+/* ---------- Util tanggal ---------- */
+const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+function dayOfYear(d) {
+  return Math.round((startOfDay(d) - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1;
+}
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const n = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - n);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - y0) / 86400000 + 1) / 7);
+}
+function selisih(d, today) {
+  const n = Math.round((startOfDay(d) - startOfDay(today)) / 86400000);
+  if (n === 0) return "Hari ini";
+  if (n === 1) return "Besok";
+  if (n === -1) return "Kemarin";
+  return n > 0 ? n + " hari lagi" : Math.abs(n) + " hari lalu";
+}
+
+const Chevron = ({ dir }) =>
+  h("svg", { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" },
+    h("path", { d: dir === "l" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6" }));
+
+function NavBtn({ dir, onClick, label }) {
+  return h("button", {
+    onClick, "aria-label": label,
+    className: "w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition",
+    style: { background: "var(--card)", border: "1px solid var(--line)", color: "var(--text)" }
+  }, h(Chevron, { dir }));
+}
+
+function Dot({ color }) {
+  return h("span", { className: "w-1 h-1 rounded-full", style: { background: color } });
+}
+
+function App() {
+  const today = new Date();
+  const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
+  const [selected, setSelected] = useState(startOfDay(today));
+  const [picker, setPicker] = useState(null); // null | "month" | "year"
+  const [yearBase, setYearBase] = useState(Math.floor(today.getFullYear() / 12) * 12);
+  const touch = useRef(null);
+
+  const goMonth = delta => {
+    const d = new Date(view.y, view.m + delta, 1);
+    setView({ y: d.getFullYear(), m: d.getMonth() });
+  };
+  const goToday = () => {
+    setView({ y: today.getFullYear(), m: today.getMonth() });
+    setSelected(startOfDay(today));
+    setPicker(null);
+  };
+
+  const first = new Date(view.y, view.m, 1).getDay();
+  const total = Math.ceil((first + new Date(view.y, view.m + 1, 0).getDate()) / 7) * 7;
+  const cells = Array.from({ length: total }, (_, i) => new Date(view.y, view.m, 1 - first + i));
+
+  /* Daftar hari besar pada bulan yang sedang dilihat */
+  const jumlahHari = new Date(view.y, view.m + 1, 0).getDate();
+  const daftarBulan = [];
+  for (let tgl = 1; tgl <= jumlahHari; tgl++) {
+    const d = new Date(view.y, view.m, tgl);
+    hariBesar(d).forEach(x => daftarBulan.push({ tanggal: d, nama: x.nama, jenis: x.jenis }));
+  }
+  daftarBulan.sort((a, b) => a.tanggal.getDate() - b.tanggal.getDate() || urutanJenis(a.jenis) - urutanJenis(b.jenis));
+
+  const jmlLibur = daftarBulan.filter(x => x.jenis !== "peringatan").length;
+  const hariBesarTerpilih = hariBesar(selected);
+  const adaDataTahun = !!HARI_LIBUR[view.y];
+
+  const onTouchStart = e => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  const onTouchEnd = e => {
+    if (!touch.current) return;
+    const dx = e.changedTouches[0].clientX - touch.current.x;
+    const dy = e.changedTouches[0].clientY - touch.current.y;
+    touch.current = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) goMonth(dx < 0 ? 1 : -1);
+  };
+
+  const pickBtn = (label, active, onClick, key) =>
+    h("button", {
+      key, onClick,
+      className: "py-3 rounded-2xl text-base font-medium active:scale-95 transition",
+      style: active
+        ? { background: "var(--accent)", color: "var(--accent-text)" }
+        : { background: "var(--soft)", color: "var(--text)" }
+    }, label);
+
+  let body;
+  if (picker === "month") {
+    body = h("div", { className: "grid grid-cols-3 gap-2 p-3" },
+      BULAN.map((n, i) => pickBtn(n, i === view.m, () => { setView({ y: view.y, m: i }); setPicker(null); }, n)));
+  } else if (picker === "year") {
+    const years = Array.from({ length: 12 }, (_, i) => yearBase + i);
+    body = h("div", null,
+      h("div", { className: "flex items-center justify-between px-3 pt-3" },
+        h(NavBtn, { dir: "l", label: "Tahun sebelumnya", onClick: () => setYearBase(yearBase - 12) }),
+        h("span", { className: "text-sm", style: { color: "var(--muted)" } }, yearBase + " – " + (yearBase + 11)),
+        h(NavBtn, { dir: "r", label: "Tahun berikutnya", onClick: () => setYearBase(yearBase + 12) })),
+      h("div", { className: "grid grid-cols-3 gap-2 p-3" },
+        years.map(y => pickBtn(String(y), y === view.y, () => { setView({ y, m: view.m }); setPicker("month"); }, y))));
+  } else {
+    body = h("div", { className: "px-2 pb-3", onTouchStart, onTouchEnd },
+      h("div", { className: "grid grid-cols-7 py-2" },
+        HARI_PENDEK.map((n, i) => h("div", {
+          key: n, className: "text-center text-xs font-semibold uppercase tracking-wide",
+          style: { color: i === 0 ? "var(--weekend)" : "var(--muted)" }
+        }, n))),
+      h("div", { className: "grid grid-cols-7 gap-y-1" },
+        cells.map(d => {
+          const inMonth = d.getMonth() === view.m;
+          const isToday = same(d, today);
+          const isSel = same(d, selected);
+          const sunday = d.getDay() === 0;
+          const hb = hariBesar(d);
+          const isLibur = hb.some(x => x.jenis === "libur");
+          const isCuti = hb.some(x => x.jenis === "cuti");
+          const isPeringatan = hb.some(x => x.jenis === "peringatan");
+
+          /* Warna angka: libur nasional & Minggu = merah, cuti bersama = oranye */
+          let warna = "var(--text)";
+          if (!inMonth) warna = "var(--muted)";
+          else if (isLibur || sunday) warna = "var(--weekend)";
+          else if (isCuti) warna = "var(--cuti)";
+
+          let style = { color: warna };
+          if (!inMonth) style.opacity = 0.42;
+          if (isToday) style = { background: "var(--accent)", color: "var(--accent-text)", fontWeight: 700 };
+          else if (isSel) style = { ...style, background: "var(--soft)", boxShadow: "inset 0 0 0 2px var(--accent)", opacity: 1 };
+
+          const dots = [];
+          if (isLibur) dots.push("var(--weekend)");
+          if (isCuti) dots.push("var(--cuti)");
+          if (isPeringatan) dots.push("var(--accent)");
+
+          const namaHariBesar = hb.map(x => x.nama).join(", ");
+
+          return h("div", { key: d.getTime(), className: "flex flex-col items-center" },
+            h("button", {
+              className: "cell w-11 h-11 rounded-full text-base flex items-center justify-center transition",
+              style,
+              "aria-label": HARI[d.getDay()] + ", " + d.getDate() + " " + BULAN[d.getMonth()] + " " + d.getFullYear()
+                + (namaHariBesar ? ", " + namaHariBesar : ""),
+              "aria-current": isToday ? "date" : undefined,
+              onClick: () => {
+                setSelected(startOfDay(d));
+                if (!inMonth) setView({ y: d.getFullYear(), m: d.getMonth() });
+              }
+            }, d.getDate()),
+            h("div", { className: "flex gap-[3px] h-1.5 mt-0.5" },
+              dots.slice(0, 3).map((c, i) => h(Dot, { key: i, color: c }))));
+        })));
+  }
+
+  return h("div", { className: "mx-auto max-w-md min-h-screen px-4 pt-5 pb-8" },
+    /* Header */
+    h("div", { className: "flex items-center justify-between mb-4" },
+      h("div", null,
+        h("button", {
+          onClick: () => setPicker(picker === "month" ? null : "month"),
+          className: "text-2xl font-bold leading-tight active:opacity-60", style: { color: "var(--text)" }
+        }, BULAN[view.m]),
+        h("button", {
+          onClick: () => { setYearBase(Math.floor(view.y / 12) * 12); setPicker(picker === "year" ? null : "year"); },
+          className: "block text-base font-medium active:opacity-60", style: { color: "var(--accent)" }
+        }, view.y)),
+      h("div", { className: "flex gap-2" },
+        h(NavBtn, { dir: "l", label: "Bulan sebelumnya", onClick: () => { setPicker(null); goMonth(-1); } }),
+        h(NavBtn, { dir: "r", label: "Bulan berikutnya", onClick: () => { setPicker(null); goMonth(1); } }))),
+
+    /* Kalender */
+    h("div", { className: "rounded-3xl overflow-hidden", style: { background: "var(--card)", border: "1px solid var(--line)" } }, body),
+
+    /* Legenda */
+    h("div", { className: "flex items-center justify-center flex-wrap gap-x-4 gap-y-1 mt-3 text-[11px]", style: { color: "var(--muted)" } },
+      h("span", { className: "flex items-center gap-1.5" }, h(Dot, { color: "var(--weekend)" }), "Libur Nasional"),
+      h("span", { className: "flex items-center gap-1.5" }, h(Dot, { color: "var(--cuti)" }), "Cuti Bersama"),
+      h("span", { className: "flex items-center gap-1.5" }, h(Dot, { color: "var(--accent)" }), "Hari Besar")),
+
+    /* Kartu detail tanggal terpilih */
+    h("div", { className: "mt-4 rounded-3xl p-5", style: { background: "var(--card)", border: "1px solid var(--line)" } },
+      h("div", { className: "flex items-start justify-between gap-3" },
+        h("div", null,
+          h("div", { className: "text-sm font-medium", style: { color: "var(--accent)" } }, selisih(selected, today)),
+          h("div", { className: "text-xl font-bold mt-0.5" }, HARI[selected.getDay()] + ", " + selected.getDate() + " " + BULAN[selected.getMonth()] + " " + selected.getFullYear())),
+        h("div", { className: "text-4xl font-bold leading-none", style: { color: "var(--accent)" } }, selected.getDate())),
+      h("div", { className: "flex gap-6 mt-4 text-sm", style: { color: "var(--muted)" } },
+        h("span", null, "Hari ke-" + dayOfYear(selected)),
+        h("span", null, "Minggu ke-" + isoWeek(selected)),
+        h("span", null, BULAN_PENDEK[selected.getMonth()] + " " + selected.getFullYear())),
+
+      /* Detail hari besar */
+      hariBesarTerpilih.length > 0 &&
+        h("div", { className: "mt-4 pt-4 space-y-2.5", style: { borderTop: "1px solid var(--line)" } },
+          hariBesarTerpilih.map((x, i) =>
+            h("div", { key: i, className: "flex items-start gap-2.5" },
+              h("span", { className: "w-2.5 h-2.5 rounded-full mt-1.5 shrink-0", style: { background: warnaJenis(x.jenis) } }),
+              h("div", { className: "min-w-0" },
+                h("div", { className: "text-sm font-semibold leading-snug" }, x.nama),
+                h("div", { className: "text-xs mt-0.5", style: { color: warnaJenis(x.jenis) } }, labelJenis(x.jenis)))))
+        )
+    ),
+
+    /* Daftar hari besar bulan ini */
+    h("div", { className: "mt-4 rounded-3xl p-4", style: { background: "var(--card)", border: "1px solid var(--line)" } },
+      h("div", { className: "flex items-baseline justify-between px-1 pb-2" },
+        h("div", { className: "text-sm font-bold" }, "Hari Besar " + BULAN[view.m] + " " + view.y),
+        h("div", { className: "text-[11px]", style: { color: "var(--muted)" } },
+          jmlLibur > 0 ? jmlLibur + " hari libur/cuti" : "tidak ada libur")),
+      !adaDataTahun &&
+        h("div", { className: "text-[11px] px-1 pb-2 leading-snug", style: { color: "var(--cuti)" } },
+          "Data libur nasional tahun " + view.y + " belum tersedia — hanya hari besar tetap yang ditampilkan."),
+      daftarBulan.length === 0
+        ? h("div", { className: "text-sm px-1 py-3", style: { color: "var(--muted)" } }, "Tidak ada hari besar pada bulan ini.")
+        : h("div", null,
+            daftarBulan.map((x, i) =>
+              h("button", {
+                key: i,
+                onClick: () => setSelected(startOfDay(x.tanggal)),
+                className: "list-item w-full flex items-start gap-3 py-2 px-1 text-left transition",
+                style: same(x.tanggal, selected) ? { background: "var(--soft)", borderRadius: 14 } : null
+              },
+                h("div", { className: "w-10 shrink-0 text-center pt-0.5" },
+                  h("div", { className: "text-base font-bold leading-none", style: { color: warnaJenis(x.jenis) } }, x.tanggal.getDate()),
+                  h("div", { className: "text-[10px] uppercase mt-1", style: { color: "var(--muted)" } }, HARI_PENDEK[x.tanggal.getDay()])),
+                h("div", { className: "flex-1 min-w-0 pt-0.5" },
+                  h("div", { className: "text-sm font-medium leading-snug" }, x.nama),
+                  h("div", { className: "text-[11px] mt-0.5", style: { color: warnaJenis(x.jenis) } }, labelJenis(x.jenis))))))
+    ),
+
+    /* Tombol hari ini */
+    h("button", {
+      onClick: goToday,
+      className: "mt-4 w-full py-3.5 rounded-2xl text-base font-semibold active:scale-[.98] transition",
+      style: { background: "var(--accent)", color: "var(--accent-text)" }
+    }, "Kembali ke hari ini"),
+
+    h("p", { className: "text-center text-xs mt-3 leading-relaxed", style: { color: "var(--muted)" } },
+      "Geser kiri atau kanan untuk ganti bulan. Ketuk nama bulan atau tahun untuk memilih cepat."),
+    h("p", { className: "text-center text-[11px] mt-1.5 leading-relaxed", style: { color: "var(--muted)", opacity: .8 } },
+      "Sumber libur & cuti bersama: SKB 3 Menteri (2024–2026). Tanggal hari besar keagamaan dapat berubah sesuai keputusan pemerintah.")
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+</script>
+</body>
+</html>
