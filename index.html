@@ -929,14 +929,19 @@ function FullDataView({ mode, amalId, allAmal, records, simDate, onClose }) {
 /* ============================================================
    KOMPONEN: ACCORDION AMAL (yang belum dikerjakan)
    ============================================================ */
-function AmalAccordion({ item, expanded, onToggleExpand, onClickAmal, chartData, onOpenFull }) {
+function AmalAccordion({ item, expanded, onToggleExpand, onClickAmal, chartData, onOpenFull, isDone = false }) {
   const a = item.amal;
   const info = SIFAT_INFO[a.sifat];
   const isForbidden = a.sifat === 'makruh' || a.sifat === 'haram';
-  const checkLabel = isForbidden ? 'Saya melanggar' : 'Saya mengerjakan';
-  const record = item.record;
-  const hasCatatan = !!(record?.catatan && record.catatan.trim());
-  const currentDelta = computeScore(a.sifat, a.nilai, false, 0);
+  const checkLabel = isDone
+    ? 'Edit progres amal'
+    : (isForbidden ? 'Saya melanggar' : 'Saya mengerjakan');
+  const record = item.record || {};
+  const hasCatatan = !!(
+    (record.catatan && record.catatan.trim()) ||
+    (Array.isArray(record.catatanItems) && record.catatanItems.length > 0)
+  );
+  const currentDelta = computeScore(a.sifat, a.nilai, isDone, isDone ? (record.bonus || 0) : 0);
 
   return (
     <div className="rounded-2xl overflow-hidden mb-2"
@@ -946,13 +951,14 @@ function AmalAccordion({ item, expanded, onToggleExpand, onClickAmal, chartData,
           onClick={e => { e.stopPropagation(); onClickAmal(); }}
           className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 active:scale-90 transition font-bold text-base"
           style={{
-            background: 'var(--soft)',
-            color: 'var(--muted)',
-            border: '2px dashed var(--line)',
+            background: isDone ? 'var(--pos)' : 'var(--soft)',
+            color: isDone ? '#fff' : 'var(--muted)',
+            border: isDone ? 'none' : '2px dashed var(--line)',
           }}
           title={checkLabel}>
-          {''}
+          {isDone ? '✓' : ''}
         </button>
+
         <button
           onClick={() => onToggleExpand(a.id)}
           className="flex-1 min-w-0 text-left active:opacity-60 transition">
@@ -967,22 +973,20 @@ function AmalAccordion({ item, expanded, onToggleExpand, onClickAmal, chartData,
             )}
           </div>
           <div className="text-[10px] mt-0.5 flex items-center gap-2" style={{ color: 'var(--muted)' }}>
-            <span>{checkLabel}</span>
+            <span>{isDone ? 'Sudah selesai' : checkLabel}</span>
             <span>·</span>
             <span>{a.nilai} poin</span>
-            <span>·</span>
-            <span>belum</span>
           </div>
         </button>
+
         <div className="text-sm font-bold shrink-0 mr-1"
              style={{ color: currentDelta >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
           {(currentDelta > 0 ? '+' : '') + currentDelta}
         </div>
         <div className="w-5 flex items-center justify-center shrink-0 transition-transform"
-             style={{
-               transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-               color: 'var(--muted)', fontSize: 10,
-             }}>▼</div>
+             style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', color: 'var(--muted)', fontSize: 10 }}>
+          ▼
+        </div>
       </div>
 
       {expanded && (
@@ -1005,7 +1009,7 @@ function AmalAccordion({ item, expanded, onToggleExpand, onClickAmal, chartData,
 /* ============================================================
    KOMPONEN: ACCORDION DONE (amal yang sudah dikerjakan)
    ============================================================ */
-function DoneAccordion({ title, items, records, onEdit }) {
+function DoneAccordion({ title, items, expandedAmals, onToggleExpand, chartDataByAmal, onEdit, onOpenFull }) {
   const [open, setOpen] = useState(true);
   if (items.length === 0) return null;
 
@@ -1022,51 +1026,23 @@ function DoneAccordion({ title, items, records, onEdit }) {
           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
                 style={{ background: 'var(--pos)', color: '#fff' }}>{items.length}</span>
         </div>
-        <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
-          {open ? '▲' : '▼'}
-        </span>
+        <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--line)' }}>
-          {items.map(item => {
-            const record = records[item.amal.id]?.[item.periodeKey] || {};
-            const score = computeScore(item.amal.sifat, item.amal.nilai, true, record.bonus || 0);
-            const info = SIFAT_INFO[item.amal.sifat];
-            return (
-              <button
-                key={item.amal.id}
-                onClick={() => onEdit(item.amal, item.periodeKey)}
-                className="w-full flex items-start gap-2 p-2 mt-1.5 rounded-xl text-left active:opacity-70 transition"
-                style={{ background: 'var(--soft)' }}>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
-                     style={{ background: info.color, color: '#fff' }}>✓</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-semibold">{item.amal.nama}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase"
-                          style={{ background: info.color + '22', color: info.color }}>{info.label}</span>
-                    {record.bonus ? (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
-                            style={{ background: 'var(--accent)', color: '#fff' }}>
-                        bonus {record.bonus > 0 ? '+' : ''}{record.bonus}
-                      </span>
-                    ) : null}
-                  </div>
-                  {record.catatan && (
-                    <div className="text-[10px] mt-0.5 leading-snug line-clamp-2"
-                         style={{ color: 'var(--muted)' }}>
-                      📝 {record.catatan}
-                    </div>
-                  )}
-                </div>
-                <div className="text-sm font-bold shrink-0"
-                     style={{ color: score >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
-                  {(score > 0 ? '+' : '') + score}
-                </div>
-              </button>
-            );
-          })}
+        <div className="px-2 pb-2 pt-2" style={{ borderTop: '1px solid var(--line)' }}>
+          {items.map(item => (
+            <AmalAccordion
+              key={item.amal.id}
+              item={item}
+              isDone={true}
+              expanded={!!expandedAmals[item.amal.id]}
+              onToggleExpand={onToggleExpand}
+              onClickAmal={() => onEdit(item.amal, item.periodeKey)}
+              chartData={chartDataByAmal[item.amal.id] || []}
+              onOpenFull={() => onOpenFull({ mode: 'single', amalId: item.amal.id })}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -1347,10 +1323,10 @@ function TabBeranda({
                style={{ color: 'var(--muted)' }}>
             Sudah Dikerjakan
           </div>
-          <DoneAccordion title="Harian" items={doneHarian} records={records} onEdit={onEditDone} />
-          <DoneAccordion title="Mingguan" items={doneMingguan} records={records} onEdit={onEditDone} />
-          <DoneAccordion title="Bulanan" items={doneBulanan} records={records} onEdit={onEditDone} />
-          <DoneAccordion title="Tahunan" items={doneTahunan} records={records} onEdit={onEditDone} />
+          <DoneAccordion title="Harian" items={doneHarian} expandedAmals={expandedAmals} onToggleExpand={onToggleExpand} chartDataByAmal={chartDataByAmal} onEdit={onEditDone} onOpenFull={onOpenFull} />
+          <DoneAccordion title="Mingguan" items={doneMingguan} expandedAmals={expandedAmals} onToggleExpand={onToggleExpand} chartDataByAmal={chartDataByAmal} onEdit={onEditDone} onOpenFull={onOpenFull} />
+          <DoneAccordion title="Bulanan" items={doneBulanan} expandedAmals={expandedAmals} onToggleExpand={onToggleExpand} chartDataByAmal={chartDataByAmal} onEdit={onEditDone} onOpenFull={onOpenFull} />
+          <DoneAccordion title="Tahunan" items={doneTahunan} expandedAmals={expandedAmals} onToggleExpand={onToggleExpand} chartDataByAmal={chartDataByAmal} onEdit={onEditDone} onOpenFull={onOpenFull} />
         </div>
       )}
 
