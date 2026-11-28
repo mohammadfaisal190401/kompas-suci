@@ -14,6 +14,7 @@
     --accent:#4f46e5; --accent-text:#ffffff; --soft:#eef0ff;
     --wajib:#4f46e5; --sunah:#10b981; --makruh:#f59e0b; --haram:#e11d48;
     --pos:#10b981; --neg:#e11d48;
+    --weekend:#e11d48; --cuti:#ea580c; --note:#10b981; --amal:#0ea5e9;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -22,6 +23,7 @@
       --accent:#818cf8; --accent-text:#0f1117; --soft:#232647;
       --wajib:#818cf8; --sunah:#34d399; --makruh:#fbbf24; --haram:#fb7185;
       --pos:#34d399; --neg:#fb7185;
+      --weekend:#fb7185; --cuti:#fb923c; --note:#34d399; --amal:#38bdf8;
       color-scheme: dark;
     }
   }
@@ -30,6 +32,7 @@
     --accent:#818cf8; --accent-text:#0f1117; --soft:#232647;
     --wajib:#818cf8; --sunah:#34d399; --makruh:#fbbf24; --haram:#fb7185;
     --pos:#34d399; --neg:#fb7185;
+      --weekend:#fb7185; --cuti:#fb923c; --note:#34d399; --amal:#38bdf8;
     color-scheme: dark;
   }
   html, body { margin:0; background:var(--bg); color:var(--text);
@@ -39,12 +42,14 @@
   input, textarea, select { font-family: inherit; outline: none; }
   input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 2px var(--accent); }
   .btn-check:active { transform: scale(.97); }
+  .cell:active { transform: scale(.92); }
+  .list-item:active { opacity: .55; }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-const { useState, useMemo, useEffect } = React;
+const { useState, useMemo, useEffect, useRef } = React;
 
 /* ============================================================
    KONSTANTA
@@ -280,6 +285,635 @@ function ArahChart({ data, height = 180 }) {
         </>
       )}
     </svg>
+  );
+}
+
+/* ============================================================
+   KALENDER: DATA HARI BESAR & UTIL
+   ============================================================ */
+const LS_RENCANA = 'kalender-catatan-v1'; // data "rencana" dari kalender (terpisah dari catatan amal)
+const BULAN = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+const HARI = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+
+const HARI_LIBUR = {
+  2024: [
+    [1,1,"Tahun Baru 2024 Masehi","libur"],[2,8,"Isra Mikraj Nabi Muhammad SAW","libur"],
+    [2,9,"Cuti Bersama Tahun Baru Imlek","cuti"],[2,10,"Tahun Baru Imlek 2575 Kongzili","libur"],
+    [3,10,"Hari Suci Nyepi (Tahun Baru Saka 1946)","libur"],[3,11,"Cuti Bersama Hari Suci Nyepi","cuti"],
+    [3,29,"Wafat Isa Al Masih","libur"],[3,31,"Hari Paskah","peringatan"],
+    [4,8,"Cuti Bersama Idul Fitri 1445 H","cuti"],[4,9,"Cuti Bersama Idul Fitri 1445 H","cuti"],
+    [4,10,"Hari Raya Idul Fitri 1445 H","libur"],[4,11,"Hari Raya Idul Fitri 1445 H (Hari Kedua)","libur"],
+    [4,12,"Cuti Bersama Idul Fitri 1445 H","cuti"],[4,15,"Cuti Bersama Idul Fitri 1445 H","cuti"],
+    [5,1,"Hari Buruh Internasional","libur"],[5,9,"Kenaikan Isa Al Masih","libur"],
+    [5,10,"Cuti Bersama Kenaikan Isa Al Masih","cuti"],[5,23,"Hari Raya Waisak 2568 BE","libur"],
+    [5,24,"Cuti Bersama Hari Raya Waisak","cuti"],[6,1,"Hari Lahir Pancasila","libur"],
+    [6,17,"Hari Raya Idul Adha 1445 H","libur"],[6,18,"Cuti Bersama Idul Adha 1445 H","cuti"],
+    [7,7,"Tahun Baru Islam 1446 H","libur"],[8,17,"Hari Kemerdekaan Republik Indonesia","libur"],
+    [9,16,"Maulid Nabi Muhammad SAW","libur"],[12,24,"Cuti Bersama Hari Raya Natal","cuti"],
+    [12,25,"Hari Raya Natal","libur"],[12,26,"Cuti Bersama Hari Raya Natal","cuti"]
+  ],
+  2025: [
+    [1,1,"Tahun Baru 2025 Masehi","libur"],[1,27,"Isra Mikraj Nabi Muhammad SAW","libur"],
+    [1,28,"Cuti Bersama Tahun Baru Imlek","cuti"],[1,29,"Tahun Baru Imlek 2576 Kongzili","libur"],
+    [3,29,"Hari Suci Nyepi (Tahun Baru Saka 1947)","libur"],[3,31,"Hari Raya Idul Fitri 1446 H","libur"],
+    [4,1,"Hari Raya Idul Fitri 1446 H (Hari Kedua)","libur"],[4,2,"Cuti Bersama Idul Fitri 1446 H","cuti"],
+    [4,3,"Cuti Bersama Idul Fitri 1446 H","cuti"],[4,4,"Cuti Bersama Idul Fitri 1446 H","cuti"],
+    [4,7,"Cuti Bersama Idul Fitri 1446 H","cuti"],[4,18,"Wafat Isa Al Masih","libur"],
+    [4,20,"Hari Paskah","peringatan"],[5,1,"Hari Buruh Internasional","libur"],
+    [5,12,"Hari Raya Waisak 2569 BE","libur"],[5,13,"Cuti Bersama Hari Raya Waisak","cuti"],
+    [5,29,"Kenaikan Isa Al Masih","libur"],[5,30,"Cuti Bersama Kenaikan Isa Al Masih","cuti"],
+    [6,1,"Hari Lahir Pancasila","libur"],[6,6,"Hari Raya Idul Adha 1446 H","libur"],
+    [6,9,"Cuti Bersama Idul Adha 1446 H","cuti"],[6,27,"Tahun Baru Islam 1447 H","libur"],
+    [8,17,"Hari Kemerdekaan Republik Indonesia","libur"],[9,5,"Maulid Nabi Muhammad SAW","libur"],
+    [12,25,"Hari Raya Natal","libur"],[12,26,"Cuti Bersama Hari Raya Natal","cuti"]
+  ],
+  2026: [
+    [1,1,"Tahun Baru 2026 Masehi","libur"],[1,16,"Isra Mikraj Nabi Muhammad SAW","libur"],
+    [2,17,"Tahun Baru Imlek 2577 Kongzili","libur"],[3,19,"Hari Suci Nyepi (Tahun Baru Saka 1948)","libur"],
+    [3,20,"Hari Raya Idul Fitri 1447 H","libur"],[3,21,"Hari Raya Idul Fitri 1447 H (Hari Kedua)","libur"],
+    [4,3,"Wafat Isa Al Masih","libur"],[4,5,"Hari Paskah","peringatan"],
+    [5,1,"Hari Buruh Internasional","libur"],[5,14,"Kenaikan Isa Al Masih","libur"],
+    [5,27,"Hari Raya Idul Adha 1447 H","libur"],[5,31,"Hari Raya Waisak 2570 BE","libur"],
+    [6,1,"Hari Lahir Pancasila","libur"],[6,16,"Tahun Baru Islam 1448 H","libur"],
+    [8,17,"Hari Kemerdekaan Republik Indonesia","libur"],[8,25,"Maulid Nabi Muhammad SAW","libur"],
+    [12,25,"Hari Raya Natal","libur"]
+  ]
+};
+
+const PERINGATAN_TETAP = [
+  [1,3,"Hari Amal Bakti Kementerian Agama"],[1,5,"Hari KOWAL"],[1,10,"Hari Gerakan Satu Juta Pohon"],
+  [1,15,"Hari Dharma Samudera"],[1,25,"Hari Gizi Nasional"],[2,9,"Hari Pers Nasional"],
+  [2,21,"Hari Bahasa Ibu Internasional"],[3,1,"Hari Penegakan Kedaulatan Negara"],
+  [3,6,"Hari Kostrad"],[3,8,"Hari Perempuan Internasional"],[3,9,"Hari Musik Nasional"],
+  [3,21,"Hari Puisi Sedunia"],[3,22,"Hari Air Sedunia"],[3,23,"Hari Meteorologi Sedunia"],
+  [3,24,"Hari Tuberkulosis Sedunia"],[4,6,"Hari Nelayan Indonesia"],[4,9,"Hari TNI AU"],
+  [4,19,"Hari Hansip"],[4,21,"Hari Kartini"],[4,22,"Hari Bumi"],[4,23,"Hari Buku Sedunia"],
+  [4,28,"Hari Puisi Nasional"],[5,2,"Hari Pendidikan Nasional"],[5,5,"Hari Lembaga Sosial Desa"],
+  [5,20,"Hari Kebangkitan Nasional"],[5,21,"Hari Reformasi"],[6,5,"Hari Lingkungan Hidup Sedunia"],
+  [6,22,"Hari Ulang Tahun Kota Jakarta"],[6,24,"Hari Bidan Nasional"],[6,29,"Hari KB Nasional"],
+  [7,1,"Hari Bhayangkara"],[7,12,"Hari Koperasi Indonesia"],[7,22,"Hari Kejaksaan RI"],
+  [7,23,"Hari Anak Nasional"],[7,24,"Hari Kebaya Nasional"],[8,10,"Hari Veteran Nasional"],
+  [8,14,"Hari Pramuka"],[8,18,"Hari Konstitusi RI"],[8,21,"Hari Maritim Nasional"],
+  [9,1,"Hari Polwan"],[9,8,"Hari Aksara Internasional"],[9,9,"Hari Olahraga Nasional"],
+  [9,11,"Hari RRI"],[9,14,"Hari Kunjung Perpustakaan"],[9,17,"Hari Palang Merah Nasional"],
+  [9,21,"Hari Perdamaian Dunia"],[9,24,"Hari Tani Nasional"],[9,28,"Hari Kereta Api Indonesia"],
+  [10,1,"Hari Kesaktian Pancasila"],[10,2,"Hari Batik Nasional"],[10,5,"Hari TNI"],
+  [10,16,"Hari Parlemen Indonesia"],[10,22,"Hari Santri Nasional"],[10,24,"Hari Dokter Nasional"],
+  [10,28,"Hari Sumpah Pemuda"],[11,5,"Hari Cinta Puspa dan Satwa Nasional"],[11,10,"Hari Pahlawan"],
+  [11,12,"Hari Kesehatan Nasional"],[11,25,"Hari Guru Nasional"],[11,28,"Hari Menanam Pohon Indonesia"],
+  [12,1,"Hari AIDS Sedunia"],[12,3,"Hari Disabilitas Internasional"],[12,9,"Hari Anti Korupsi Sedunia"],
+  [12,13,"Hari Nusantara"],[12,15,"Hari Juang Kartika TNI AD"],[12,19,"Hari Bela Negara"],[12,22,"Hari Ibu"]
+];
+
+const petaLibur = {};
+Object.keys(HARI_LIBUR).forEach(y => HARI_LIBUR[y].forEach(([m, d, n, t]) => {
+  (petaLibur[y + "-" + m + "-" + d] = petaLibur[y + "-" + m + "-" + d] || []).push({ nama: n, jenis: t });
+}));
+const petaPeringatan = {};
+PERINGATAN_TETAP.forEach(([m, d, n]) => {
+  (petaPeringatan[m + "-" + d] = petaPeringatan[m + "-" + d] || []).push({ nama: n, jenis: "peringatan" });
+});
+function hariBesar(d) {
+  return (petaLibur[d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate()] || [])
+    .concat(petaPeringatan[(d.getMonth() + 1) + "-" + d.getDate()] || []);
+}
+const warnaJenis = t => t === "libur" ? "var(--weekend)" : t === "cuti" ? "var(--cuti)" : "var(--accent)";
+const labelJenis = t => t === "libur" ? "Libur Nasional" : t === "cuti" ? "Cuti Bersama" : "Hari Besar / Peringatan";
+const urutanJenis = t => (t === "libur" ? 0 : t === "cuti" ? 1 : 2);
+const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+function dayOfYear(d) { return Math.round((startOfDay(d) - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1; }
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  return Math.ceil(((t - new Date(Date.UTC(t.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7);
+}
+function selisih(d, today) {
+  const n = Math.round((startOfDay(d) - startOfDay(today)) / 86400000);
+  if (n === 0) return "Hari ini";
+  if (n === 1) return "Besok";
+  if (n === -1) return "Kemarin";
+  return n > 0 ? n + " hari lagi" : Math.abs(n) + " hari lalu";
+}
+
+/* Penyimpanan RENCANA (data dari kalender) — terpisah dari records amal */
+function bacaCatatanLokal() {
+  const s = localStorage.getItem(LS_RENCANA);
+  if (!s) return [];
+  const data = JSON.parse(s);
+  if (!Array.isArray(data)) throw new Error("Format data catatan di browser tidak valid.");
+  return data;
+}
+function simpanCatatanLokal(data) { localStorage.setItem(LS_RENCANA, JSON.stringify(data)); }
+function buatIdCatatan() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+  return "catatan-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+}
+
+/* Catatan progres amal (dari sistem amal) */
+function getNotes(rec) {
+  if (Array.isArray(rec?.catatanItems)) return rec.catatanItems;
+  return rec?.catatan?.trim() ? [{ id: 'legacy', title: 'Catatan', content: rec.catatan }] : [];
+}
+const sifatColor = s => s === 'haram' ? 'var(--haram)' : s === 'makruh' ? 'var(--makruh)' : 'var(--sunah)';
+
+/* tanggal -> daftar { amal, periodeKey, record, missed } */
+function buildDayMap(amalList, records, simDate) {
+  const map = {};
+  const todayKey = toKey(simDate);
+  amalList.forEach(a => {
+    const recs = records[a.id] || {};
+    Object.keys(recs).forEach(pk => {
+      const r = recs[pk];
+      const k = a.periode === 'harian' ? pk : (r.checked ? (r.tanggalCheck || r.tanggalUpdate) : r.tanggalUpdate);
+      if (!k || !(r.checked || getNotes(r).length)) return;
+      (map[k] = map[k] || []).push({ amal: a, periodeKey: pk, record: r });
+    });
+    if (a.periode === 'harian') {
+      getAllPeriodKeys(a, simDate).forEach(pk => {
+        if (pk >= todayKey || recs[pk]?.checked) return;
+        const ex = (map[pk] = map[pk] || []).find(i => i.amal.id === a.id);
+        if (ex) ex.missed = true; else map[pk].push({ amal: a, periodeKey: pk, missed: true });
+      });
+    }
+  });
+  return map;
+}
+
+/* ============================================================
+   KALENDER: GRID BULAN (dipakai Tab Kalender & kalender progres amal)
+   ============================================================ */
+function Dot({ color, hollow }) {
+  return <span className="w-1 h-1 rounded-full"
+               style={hollow ? { border: '1px solid ' + color, boxSizing: 'border-box' } : { background: color }} />;
+}
+function NavBtn({ dir, onClick, label }) {
+  return (
+    <button onClick={onClick} aria-label={label}
+            className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 transition"
+            style={{ background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--text)' }}>
+      <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <path d={dir === 'l' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'} />
+      </svg>
+    </button>
+  );
+}
+
+// cellInfo(d, inMonth) -> { color, dots: [{c, hollow}], fill }
+function CalendarGrid({ today, selected, onSelect, cellInfo, compact }) {
+  const [view, setView] = useState({ y: selected.getFullYear(), m: selected.getMonth() });
+  const [picker, setPicker] = useState(null);
+  const [yearBase, setYearBase] = useState(Math.floor(selected.getFullYear() / 12) * 12);
+  const touch = useRef(null);
+  useEffect(() => { setView({ y: selected.getFullYear(), m: selected.getMonth() }); }, [selected.getFullYear(), selected.getMonth()]);
+
+  const goMonth = delta => { const d = new Date(view.y, view.m + delta, 1); setView({ y: d.getFullYear(), m: d.getMonth() }); };
+  const first = new Date(view.y, view.m, 1).getDay();
+  const total = Math.ceil((first + new Date(view.y, view.m + 1, 0).getDate()) / 7) * 7;
+  const cells = Array.from({ length: total }, (_, i) => new Date(view.y, view.m, 1 - first + i));
+  const onTouchStart = e => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  const onTouchEnd = e => {
+    if (!touch.current) return;
+    const dx = e.changedTouches[0].clientX - touch.current.x;
+    const dy = e.changedTouches[0].clientY - touch.current.y;
+    touch.current = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) goMonth(dx < 0 ? 1 : -1);
+  };
+  const pickBtn = (label, active, onClick) => (
+    <button key={label} onClick={onClick} className="py-3 rounded-2xl text-base font-medium active:scale-95 transition"
+            style={active ? { background: 'var(--accent)', color: 'var(--accent-text)' } : { background: 'var(--soft)', color: 'var(--text)' }}>
+      {label}
+    </button>
+  );
+
+  let body;
+  if (picker === 'month') {
+    body = <div className="grid grid-cols-3 gap-2 p-3">
+      {BULAN.map((n, i) => pickBtn(n, i === view.m, () => { setView({ y: view.y, m: i }); setPicker(null); }))}
+    </div>;
+  } else if (picker === 'year') {
+    body = <div>
+      <div className="flex items-center justify-between px-3 pt-3">
+        <NavBtn dir="l" label="Tahun sebelumnya" onClick={() => setYearBase(yearBase - 12)} />
+        <span className="text-sm" style={{ color: 'var(--muted)' }}>{yearBase + ' – ' + (yearBase + 11)}</span>
+        <NavBtn dir="r" label="Tahun berikutnya" onClick={() => setYearBase(yearBase + 12)} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 p-3">
+        {Array.from({ length: 12 }, (_, i) => yearBase + i).map(y =>
+          pickBtn(String(y), y === view.y, () => { setView({ y, m: view.m }); setPicker('month'); }))}
+      </div>
+    </div>;
+  } else {
+    body = <div className="px-2 pb-3" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className="grid grid-cols-7 py-2">
+        {HARI_PENDEK.map((n, i) => (
+          <div key={n} className="text-center text-xs font-semibold uppercase tracking-wide"
+               style={{ color: i === 0 ? 'var(--weekend)' : 'var(--muted)' }}>{n}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map(d => {
+          const inMonth = d.getMonth() === view.m;
+          const isToday = same(d, today), isSel = same(d, selected);
+          const info = cellInfo(d, inMonth);
+          let style = { color: inMonth ? info.color : 'var(--muted)' };
+          if (!inMonth) style.opacity = 0.42;
+          if (info.fill && inMonth) style = { background: info.fill, color: '#fff', fontWeight: 600 };
+          if (isToday) style = { background: 'var(--accent)', color: 'var(--accent-text)', fontWeight: 700 };
+          else if (isSel) style = { ...style, boxShadow: 'inset 0 0 0 2px var(--accent)', opacity: 1, ...(info.fill && inMonth ? {} : { background: 'var(--soft)' }) };
+          return (
+            <div key={d.getTime()} className="flex flex-col items-center">
+              <button className="cell w-11 h-11 rounded-full text-base flex items-center justify-center transition relative"
+                      style={style} aria-current={isToday ? 'date' : undefined}
+                      aria-label={HARI[d.getDay()] + ', ' + d.getDate() + ' ' + BULAN[d.getMonth()] + ' ' + d.getFullYear()}
+                      onClick={() => onSelect(startOfDay(d))}>{d.getDate()}</button>
+              <div className="flex gap-[3px] h-1.5 mt-0.5">
+                {info.dots.slice(0, 4).map((x, i) => <Dot key={i} color={x.c} hollow={x.hollow} />)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>;
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="min-w-0">
+          <button onClick={() => setPicker(picker === 'month' ? null : 'month')}
+                  className={(compact ? 'text-xl' : 'text-2xl') + ' font-bold leading-tight active:opacity-60 block text-left truncate'}>
+            {BULAN[view.m]}
+          </button>
+          <button onClick={() => { setYearBase(Math.floor(view.y / 12) * 12); setPicker(picker === 'year' ? null : 'year'); }}
+                  className="block text-base font-medium active:opacity-60 text-left" style={{ color: 'var(--accent)' }}>
+            {view.y}
+          </button>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <NavBtn dir="l" label="Bulan sebelumnya" onClick={() => { setPicker(null); goMonth(-1); }} />
+          <NavBtn dir="r" label="Bulan berikutnya" onClick={() => { setPicker(null); goMonth(1); }} />
+        </div>
+      </div>
+      <div className="rounded-3xl overflow-hidden" style={{ background: 'var(--card)', border: '1px solid var(--line)' }}>{body}</div>
+    </div>
+  );
+}
+
+/* ============================================================
+   PANEL CATATAN AMAL PER TANGGAL (accordion per amal)
+   ============================================================ */
+function AmalDayPanel({ items, onManage, emptyText }) {
+  const [open, setOpen] = useState({});
+  if (!items.length) {
+    return <div className="text-sm px-1 py-3" style={{ color: 'var(--muted)' }}>{emptyText}</div>;
+  }
+  return (
+    <div className="space-y-2">
+      {items.map(it => {
+        const key = it.amal.id + '|' + it.periodeKey;
+        const isOpen = open[key] ?? items.length === 1;
+        const rec = it.record;
+        const notes = getNotes(rec);
+        const status = rec?.checked ? 'Dikerjakan' : it.missed ? 'Bolong' : 'Catatan';
+        const sc = rec?.checked ? sifatColor(it.amal.sifat) : it.missed ? 'var(--neg)' : 'var(--muted)';
+        return (
+          <div key={key} className="rounded-xl overflow-hidden" style={{ background: 'var(--soft)' }}>
+            <button onClick={() => setOpen(o => ({ ...o, [key]: !isOpen }))}
+                    className="w-full flex items-center gap-2 p-2.5 text-left active:opacity-70">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: sc }} />
+              <span className="flex-1 min-w-0 text-sm font-semibold truncate">{it.amal.nama}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0"
+                    style={{ background: 'var(--card)', color: sc }}>{status}</span>
+              <span style={{ color: 'var(--muted)' }}>{isOpen ? '▴' : '▾'}</span>
+            </button>
+            {isOpen && (
+              <div className="px-3 pb-3">
+                <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
+                  {SIFAT_INFO[it.amal.sifat].label + ' · ' + it.amal.nilai + ' poin · ' + it.amal.periode}
+                  {rec?.checked && Number(rec.bonus) ? ' · bonus +' + rec.bonus : ''}
+                </div>
+                {notes.length === 0
+                  ? <div className="text-xs" style={{ color: 'var(--muted)' }}>Belum ada catatan progres.</div>
+                  : <div className="space-y-1.5">
+                      {notes.map(n => (
+                        <div key={n.id} className="rounded-lg p-2" style={{ background: 'var(--card)' }}>
+                          <div className="text-xs font-semibold break-words">{n.title}</div>
+                          {n.content && <div className="text-xs mt-0.5 whitespace-pre-wrap break-words" style={{ color: 'var(--muted)' }}>{n.content}</div>}
+                        </div>
+                      ))}
+                    </div>}
+                {onManage && (
+                  <button onClick={() => onManage(it.amal, it.periodeKey)}
+                          className="mt-2 px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95"
+                          style={{ background: 'var(--accent)', color: 'var(--accent-text)' }}>
+                    {rec?.checked ? 'Kelola progres & catatan' : 'Centang / tulis catatan'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================================
+   KALENDER PROGRES AMAL (di Lihat Semua) — hijau/kuning/merah sesuai sifat
+   ============================================================ */
+function AmalCalendar({ amalList, records, simDate, onManage }) {
+  const [selected, setSelected] = useState(startOfDay(simDate));
+  const dayMap = useMemo(() => buildDayMap(amalList, records, simDate), [amalList, records, simDate]);
+  const single = amalList.length === 1;
+  const cellInfo = (d) => {
+    const items = dayMap[toKey(d)] || [];
+    const dots = [];
+    items.forEach(it => {
+      if (it.record?.checked) dots.push({ c: sifatColor(it.amal.sifat) });
+      else if (it.missed) dots.push({ c: 'var(--neg)', hollow: true });
+    });
+    const done = items.find(it => it.record?.checked);
+    return {
+      color: d.getDay() === 0 ? 'var(--weekend)' : 'var(--text)',
+      dots: single ? (done ? [] : dots) : dots,
+      fill: single && done ? sifatColor(done.amal.sifat) : null,
+    };
+  };
+  const sel = dayMap[toKey(selected)] || [];
+  return (
+    <div>
+      <CalendarGrid today={startOfDay(simDate)} selected={selected} onSelect={setSelected} cellInfo={cellInfo} compact />
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2 mb-3 text-[10px]" style={{ color: 'var(--muted)' }}>
+        <span className="flex items-center gap-1"><Dot color="var(--sunah)" />Dikerjakan (wajib/sunah)</span>
+        <span className="flex items-center gap-1"><Dot color="var(--makruh)" />Makruh</span>
+        <span className="flex items-center gap-1"><Dot color="var(--haram)" />Haram</span>
+        <span className="flex items-center gap-1"><Dot color="var(--neg)" hollow />Bolong (harian)</span>
+      </div>
+      <div className="text-xs font-bold px-1 mb-2">{formatDateFull(selected)}</div>
+      <AmalDayPanel key={toKey(selected)} items={sel} onManage={onManage}
+                    emptyText="Tidak ada data progres atau catatan pada tanggal ini." />
+    </div>
+  );
+}
+
+/* Bagian kalender di Lihat Semua: single = langsung, all = accordion per amal */
+function CalendarSection({ mode, amalList, records, simDate, onManage }) {
+  const [open, setOpen] = useState({});
+  if (amalList.length === 0) return null;
+  const wrap = { background: 'var(--card)', border: '1px solid var(--line)' };
+  if (mode === 'single') {
+    return (
+      <div className="rounded-3xl p-4" style={wrap}>
+        <div className="text-sm font-bold mb-3 px-1">Kalender Progres</div>
+        <AmalCalendar amalList={amalList} records={records} simDate={simDate} onManage={onManage} />
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="text-[11px] font-bold uppercase mb-2 px-1 tracking-wide" style={{ color: 'var(--muted)' }}>Kalender Progres per Amal</div>
+      {amalList.map(a => (
+        <div key={a.id} className="rounded-2xl mb-2 overflow-hidden" style={wrap}>
+          <button onClick={() => setOpen(o => ({ ...o, [a.id]: !o[a.id] }))}
+                  className="w-full flex items-center gap-2 p-3 text-left active:opacity-70">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: SIFAT_INFO[a.sifat].color }} />
+            <span className="flex-1 min-w-0 text-sm font-semibold truncate">{a.nama}</span>
+            <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{a.periode}</span>
+            <span style={{ color: 'var(--muted)' }}>{open[a.id] ? '▴' : '▾'}</span>
+          </button>
+          {open[a.id] && (
+            <div className="px-3 pb-3">
+              <AmalCalendar amalList={[a]} records={records} simDate={simDate} onManage={onManage} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================
+   TAB KALENDER (hari besar + rencana dari kalender + catatan progres amal)
+   ============================================================ */
+function TabKalender({ amal, records, simDate, onManage }) {
+  const today = startOfDay(simDate);
+  const [selected, setSelected] = useState(today);
+  const [rencana, setRencana] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [fJudul, setFJudul] = useState('');
+  const [fCatatan, setFCatatan] = useState('');
+  const [fStatus, setFStatus] = useState('rencana');
+  const selectedKey = toKey(selected);
+
+  const loadRencana = () => {
+    setLoading(true); setError(null);
+    try { setRencana(bacaCatatanLokal()); }
+    catch (err) { setError('Gagal membaca catatan: ' + err.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { loadRencana(); }, []);
+
+  const byDate = useMemo(() => {
+    const m = {};
+    rencana.forEach(n => { if (n && n.tanggal) (m[n.tanggal] = m[n.tanggal] || []).push(n); });
+    return m;
+  }, [rencana]);
+  const dayMap = useMemo(() => buildDayMap(amal, records, simDate), [amal, records, simDate]);
+  const selRencana = byDate[selectedKey] || [];
+  const selAmal = (dayMap[selectedKey] || []).filter(it => getNotes(it.record).length > 0);
+
+  const closeForm = () => { setShowForm(false); setEditing(null); setFJudul(''); setFCatatan(''); setFStatus('rencana'); };
+  useEffect(() => { closeForm(); }, [selectedKey]);
+  const openAdd = () => { closeForm(); setShowForm(true); };
+  const openEdit = n => { setEditing(n); setFJudul(n.judul || ''); setFCatatan(n.catatan || ''); setFStatus(n.status === 'selesai' ? 'selesai' : 'rencana'); setShowForm(true); };
+
+  const submitForm = () => {
+    if (!fJudul.trim()) { alert('Judul catatan wajib diisi.'); return; }
+    setSaving(true);
+    try {
+      const lama = bacaCatatanLokal();
+      let baru;
+      if (editing) {
+        if (!lama.some(n => String(n.id) === String(editing.id))) throw new Error('Catatan yang ingin diedit tidak ditemukan.');
+        baru = lama.map(n => String(n.id) === String(editing.id)
+          ? { ...n, judul: fJudul.trim(), catatan: fCatatan.trim(), status: fStatus, diperbaruiPada: new Date().toISOString() } : n);
+      } else {
+        baru = [...lama, { id: buatIdCatatan(), tanggal: selectedKey, judul: fJudul.trim(), catatan: fCatatan.trim(), status: fStatus, dibuatPada: new Date().toISOString() }];
+      }
+      simpanCatatanLokal(baru); setRencana(baru); setError(null); closeForm();
+    } catch (err) { alert('Gagal menyimpan: ' + err.message); }
+    finally { setSaving(false); }
+  };
+  const handleDelete = id => {
+    if (!confirm('Hapus catatan ini?')) return;
+    try {
+      const baru = bacaCatatanLokal().filter(n => String(n.id) !== String(id));
+      simpanCatatanLokal(baru); setRencana(baru); setError(null);
+    } catch (err) { alert('Gagal menghapus: ' + err.message); }
+  };
+
+  const cellInfo = (d, inMonth) => {
+    const hb = hariBesar(d);
+    const libur = hb.some(x => x.jenis === 'libur'), cuti = hb.some(x => x.jenis === 'cuti'), per = hb.some(x => x.jenis === 'peringatan');
+    const k = toKey(d);
+    let color = 'var(--text)';
+    if (libur || d.getDay() === 0) color = 'var(--weekend)'; else if (cuti) color = 'var(--cuti)';
+    const dots = [];
+    if (libur) dots.push({ c: 'var(--weekend)' });
+    if (cuti) dots.push({ c: 'var(--cuti)' });
+    if ((byDate[k] || []).length) dots.push({ c: 'var(--note)' });
+    if ((dayMap[k] || []).some(it => getNotes(it.record).length)) dots.push({ c: 'var(--amal)' });
+    if (per) dots.push({ c: 'var(--accent)' });
+    return { color, dots };
+  };
+
+  const monthY = selected.getFullYear(), monthM = selected.getMonth();
+  const daftarBulan = [];
+  for (let t = 1; t <= new Date(monthY, monthM + 1, 0).getDate(); t++) {
+    const d = new Date(monthY, monthM, t);
+    hariBesar(d).forEach(x => daftarBulan.push({ tanggal: d, nama: x.nama, jenis: x.jenis }));
+  }
+  daftarBulan.sort((a, b) => a.tanggal.getDate() - b.tanggal.getDate() || urutanJenis(a.jenis) - urutanJenis(b.jenis));
+  const jmlLibur = daftarBulan.filter(x => x.jenis !== 'peringatan').length;
+  const hbTerpilih = hariBesar(selected);
+  const card = { background: 'var(--card)', border: '1px solid var(--line)' };
+  const inputStyle = { background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--line)' };
+
+  return (
+    <div>
+      <CalendarGrid today={today} selected={selected} onSelect={setSelected} cellInfo={cellInfo} />
+      <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1 mt-3 text-[11px]" style={{ color: 'var(--muted)' }}>
+        <span className="flex items-center gap-1.5"><Dot color="var(--weekend)" />Libur</span>
+        <span className="flex items-center gap-1.5"><Dot color="var(--cuti)" />Cuti</span>
+        <span className="flex items-center gap-1.5"><Dot color="var(--note)" />Rencana</span>
+        <span className="flex items-center gap-1.5"><Dot color="var(--amal)" />Catatan Amal</span>
+        <span className="flex items-center gap-1.5"><Dot color="var(--accent)" />Hari Besar</span>
+      </div>
+
+      <div className="mt-4 rounded-3xl p-5" style={card}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium" style={{ color: 'var(--accent)' }}>{selisih(selected, today)}</div>
+            <div className="text-xl font-bold mt-0.5">{HARI[selected.getDay()] + ', ' + selected.getDate() + ' ' + BULAN[selected.getMonth()] + ' ' + selected.getFullYear()}</div>
+          </div>
+          <div className="text-4xl font-bold leading-none" style={{ color: 'var(--accent)' }}>{selected.getDate()}</div>
+        </div>
+        <div className="flex gap-6 mt-4 text-sm" style={{ color: 'var(--muted)' }}>
+          <span>{'Hari ke-' + dayOfYear(selected)}</span>
+          <span>{'Minggu ke-' + isoWeek(selected)}</span>
+          <span>{BULAN_PENDEK[selected.getMonth()] + ' ' + selected.getFullYear()}</span>
+        </div>
+        {hbTerpilih.length > 0 && (
+          <div className="mt-4 pt-4 space-y-2.5" style={{ borderTop: '1px solid var(--line)' }}>
+            {hbTerpilih.map((x, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style={{ background: warnaJenis(x.jenis) }} />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold leading-snug">{x.nama}</div>
+                  <div className="text-xs mt-0.5" style={{ color: warnaJenis(x.jenis) }}>{labelJenis(x.jenis)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* RENCANA — dibuat dari kalender (disimpan terpisah) */}
+      <div className="mt-4 rounded-3xl p-4" style={card}>
+        <div className="flex items-center justify-between px-1 pb-2 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-bold shrink-0">Rencana</span>
+            {!loading && !error && selRencana.length > 0 &&
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 font-semibold" style={{ background: 'var(--soft)', color: 'var(--accent)' }}>{selRencana.length}</span>}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {!showForm && <button onClick={openAdd} className="px-3 py-1.5 rounded-full text-xs font-semibold active:scale-95 transition" style={{ background: 'var(--accent)', color: 'var(--accent-text)' }}>+ Tambah</button>}
+            <button onClick={loadRencana} aria-label="Muat ulang rencana" className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition" style={{ background: 'var(--soft)', color: 'var(--muted)' }}>↻</button>
+          </div>
+        </div>
+        {error && <div className="mx-1 mt-2 p-3 rounded-xl text-xs leading-relaxed" style={{ background: 'rgba(225,29,72,.1)', color: 'var(--weekend)' }}><div className="font-bold mb-1">Penyimpanan lokal bermasalah</div>{error}</div>}
+        {loading && <div className="text-xs px-1 py-3" style={{ color: 'var(--muted)' }}>Memuat catatan...</div>}
+        {showForm && (
+          <div className="mt-1 p-3 rounded-2xl" style={{ background: 'var(--soft)' }}>
+            <div className="text-[11px] font-semibold mb-2" style={{ color: 'var(--accent)' }}>
+              {(editing ? 'Edit rencana · ' : 'Rencana baru · ') + formatDateShort(selected) + ' ' + selected.getFullYear()}
+            </div>
+            <input value={fJudul} onChange={e => setFJudul(e.target.value)} placeholder="Judul (mis. Meeting dengan tim)" maxLength={120} className="w-full px-3 py-2.5 rounded-xl text-sm mb-2" style={inputStyle} />
+            <textarea value={fCatatan} onChange={e => setFCatatan(e.target.value)} placeholder="Detail catatan (opsional)..." rows={3} maxLength={1000} className="w-full px-3 py-2.5 rounded-xl text-sm mb-2 resize-none" style={inputStyle} />
+            <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="w-full px-3 py-2.5 rounded-xl text-sm mb-3" style={inputStyle}>
+              <option value="rencana">Rencana</option>
+              <option value="selesai">Selesai</option>
+            </select>
+            <div className="flex gap-2">
+              <button onClick={submitForm} disabled={saving} className="flex-1 py-2.5 rounded-xl text-sm font-semibold active:scale-[.98] transition" style={{ background: 'var(--accent)', color: 'var(--accent-text)', opacity: saving ? 0.6 : 1 }}>{saving ? 'Menyimpan...' : 'Simpan'}</button>
+              <button onClick={closeForm} disabled={saving} className="px-4 py-2.5 rounded-xl text-sm font-medium active:scale-[.98] transition" style={inputStyle}>Batal</button>
+            </div>
+          </div>
+        )}
+        {!showForm && (selRencana.length === 0
+          ? <div className="text-sm px-1 py-3" style={{ color: 'var(--muted)' }}>{'Belum ada rencana. Ketuk "Tambah" untuk membuat rencana.'}</div>
+          : <div className="space-y-2 mt-1">
+              {selRencana.map(n => (
+                <div key={n.id} className="flex items-start gap-2 p-2.5 rounded-xl" style={{ background: 'var(--soft)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold break-words">{n.judul}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0"
+                            style={n.status === 'selesai' ? { background: '#059669', color: '#fff' } : { background: 'var(--card)', color: 'var(--accent)', border: '1px solid var(--accent)' }}>
+                        {n.status === 'selesai' ? 'Selesai' : 'Rencana'}
+                      </span>
+                    </div>
+                    {n.catatan && <div className="text-xs mt-1 leading-relaxed whitespace-pre-wrap break-words" style={{ color: 'var(--muted)' }}>{n.catatan}</div>}
+                  </div>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button onClick={() => openEdit(n)} aria-label="Edit rencana" className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition text-xs" style={{ background: 'var(--card)', color: 'var(--accent)' }}>✎</button>
+                    <button onClick={() => handleDelete(n.id)} aria-label="Hapus rencana" className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition text-xs" style={{ background: 'var(--card)', color: 'var(--weekend)' }}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>)}
+      </div>
+
+      {/* CATATAN PROGRES AMAL — dari sistem amal (data terpisah dari rencana) */}
+      <div className="mt-4 rounded-3xl p-4" style={card}>
+        <div className="flex items-center gap-2 px-1 pb-2">
+          <span className="text-sm font-bold">Catatan Progres Amal</span>
+          {selAmal.length > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--soft)', color: 'var(--accent)' }}>{selAmal.length}</span>}
+        </div>
+        <AmalDayPanel key={selectedKey} items={selAmal} onManage={onManage} emptyText="Belum ada catatan progres amal pada tanggal ini." />
+      </div>
+
+      <div className="mt-4 rounded-3xl p-4" style={card}>
+        <div className="flex items-baseline justify-between px-1 pb-2">
+          <div className="text-sm font-bold">{'Hari Besar ' + BULAN[monthM] + ' ' + monthY}</div>
+          <div className="text-[11px]" style={{ color: 'var(--muted)' }}>{jmlLibur > 0 ? jmlLibur + ' hari libur/cuti' : 'tidak ada libur'}</div>
+        </div>
+        {!HARI_LIBUR[monthY] && <div className="text-[11px] px-1 pb-2 leading-snug" style={{ color: 'var(--cuti)' }}>{'Data libur nasional tahun ' + monthY + ' belum tersedia.'}</div>}
+        {daftarBulan.length === 0
+          ? <div className="text-sm px-1 py-3" style={{ color: 'var(--muted)' }}>Tidak ada hari besar pada bulan ini.</div>
+          : daftarBulan.map((x, i) => (
+              <button key={i} onClick={() => setSelected(startOfDay(x.tanggal))}
+                      className="list-item w-full flex items-start gap-3 py-2 px-1 text-left transition"
+                      style={same(x.tanggal, selected) ? { background: 'var(--soft)', borderRadius: 14 } : null}>
+                <div className="w-10 shrink-0 text-center pt-0.5">
+                  <div className="text-base font-bold leading-none" style={{ color: warnaJenis(x.jenis) }}>{x.tanggal.getDate()}</div>
+                  <div className="text-[10px] uppercase mt-1" style={{ color: 'var(--muted)' }}>{HARI_PENDEK[x.tanggal.getDay()]}</div>
+                </div>
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <div className="text-sm font-medium leading-snug">{x.nama}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: warnaJenis(x.jenis) }}>{labelJenis(x.jenis)}</div>
+                </div>
+              </button>
+            ))}
+      </div>
+
+      <button onClick={() => setSelected(today)} className="mt-4 w-full py-3.5 rounded-2xl text-base font-semibold active:scale-[.98] transition" style={{ background: 'var(--accent)', color: 'var(--accent-text)' }}>Kembali ke hari ini</button>
+      <p className="text-center text-xs mt-3 leading-relaxed" style={{ color: 'var(--muted)' }}>Geser kiri atau kanan untuk ganti bulan. Ketuk nama bulan atau tahun untuk memilih cepat.</p>
+    </div>
   );
 }
 
@@ -738,7 +1372,7 @@ function AmalPopup({ amal, periodeKey, record, onSave, onSaveNotes, onUncheck, o
 /* ============================================================
    KOMPONEN: FULL DATA VIEW
    ============================================================ */
-function FullDataView({ mode, amalId, allAmal, records, simDate, onClose }) {
+function FullDataView({ mode, amalId, allAmal, records, simDate, onClose, onManage }) {
   const [periodType, setPeriodType] = useState('bulan');
   const [offset, setOffset] = useState(0);
 
@@ -896,7 +1530,7 @@ function FullDataView({ mode, amalId, allAmal, records, simDate, onClose }) {
                 style={{ background: 'var(--soft)', color: 'var(--text)' }}>▶</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="rounded-3xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--line)' }}>
           <ArahChart data={points} height={220} />
           <div className="grid grid-cols-2 gap-2 mt-4">
@@ -921,6 +1555,7 @@ function FullDataView({ mode, amalId, allAmal, records, simDate, onClose }) {
             </div>
           </div>
         </div>
+        <CalendarSection mode={mode} amalList={amalList} records={records} simDate={simDate} onManage={onManage} />
       </div>
     </div>
   );
@@ -1160,6 +1795,9 @@ function Sidebar({
           <SidebarItem icon="🧭" label="Beranda"
                        onClick={() => { setTab('beranda'); onClose(); }}
                        active={tab === 'beranda'} />
+          <SidebarItem icon="📅" label="Kalender"
+                       onClick={() => { setTab('kalender'); onClose(); }}
+                       active={tab === 'kalender'} />
           <SidebarItem icon="📋" label="Kelola Amal"
                        onClick={() => { setTab('kelola'); onClose(); }}
                        active={tab === 'kelola'} />
@@ -1217,7 +1855,7 @@ function Header({ tab, simDate, simIsToday, onOpenMenu, onPrevDay, onToday, onNe
                   style={{ background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--text)' }}>☰</button>
           <div className="min-w-0">
             <div className="text-xl font-bold leading-tight">
-              {tab === 'beranda' ? 'Beranda' : 'Kelola Amal'}
+              {tab === 'beranda' ? 'Beranda' : tab === 'kalender' ? 'Kalender' : 'Kelola Amal'}
             </div>
             <div className="text-[11px]" style={{ color: 'var(--muted)' }}>Kompas · Arah Hidup</div>
           </div>
@@ -1677,6 +2315,8 @@ function App() {
             onEditDone={openPopup}
             onOpenFull={setFullView}
           />
+        ) : tab === 'kalender' ? (
+          <TabKalender amal={amal} records={records} simDate={simDate} onManage={openPopup} />
         ) : (
           <TabKelola
             amal={amal}
@@ -1714,6 +2354,7 @@ function App() {
           allAmal={amal}
           records={records}
           simDate={simDate}
+          onManage={openPopup}
           onClose={() => setFullView(null)}
         />
       )}
