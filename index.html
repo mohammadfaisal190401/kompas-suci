@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kompas — Pemantau Arah Hidup</title>
+    <style>
+        /* --- RESET & BASE STYLES --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0b0d14;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Bottom sheet alignment */
+            padding-bottom: 20px;
+        }
+
+        /* --- MAIN MODAL / BOTTOM SHEET --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background: #161822;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 24px 24px 0 0;
+            padding: 24px 20px 100px 20px; /* Padding bawah besar untuk kompensasi Netlify Badge */
+            max-height: 95vh;
+            overflow-y: auto;
+            /* PERBAIKAN POSISI: Dinaikkan dari bawah agar tidak tertutup badge Netlify */
+            margin-bottom: 90px; 
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        /* --- HEADER --- */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .icon-box {
+            width: 52px; height: 52px;
+            background: #818cf8;
+            border-radius: 14px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px;
+        }
+        .title-group { flex: 1; }
+        .title-group h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .title-group p { font-size: 14px; color: #8b92a5; }
+        .close-btn {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: #252836;
+            border: none; color: #8b92a5;
+            font-size: 18px; cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* --- PROGRESS / CHECKBOX (FITUR ASLI) --- */
+        .progress-section {
+            background: #1f2230;
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: border 0.2s;
+        }
+        .progress-section:hover { border-color: #818cf8; }
+        .custom-checkbox {
+            width: 24px; height: 24px;
+            border-radius: 6px;
+            border: 2px solid #4b5563;
+            display: flex; justify-content: center; align-items: center;
+            transition: all 0.2s;
+        }
+        .progress-section.checked .custom-checkbox {
+            background: #818cf8;
+            border-color: #818cf8;
+        }
+        .custom-checkbox svg { display: none; width: 14px; height: 14px; fill: white; }
+        .progress-section.checked .custom-checkbox svg { display: block; }
+        .progress-label { font-size: 16px; font-weight: 500; }
+
+        /* --- NOTES SECTION (FITUR BARU) --- */
+        .section-title {
+            font-size: 16px;
+            color: #8b92a5;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        /* Daftar Judul Catatan (Chips) */
+        .note-list-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+            min-height: 0;
+        }
+        .note-chip {
+            background: #252836;
+            color: #e2e8f0;
+            border: 1px solid #33374a;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .note-chip.active {
+            background: #818cf8;
+            border-color: #818cf8;
+            color: white;
+        }
+
+        /* Tombol Tambah Catatan Kecil */
+        .btn-add-small {
+            background: transparent;
+            color: #818cf8;
+            border: 1px dashed #818cf8;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-bottom: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-add-small:hover { background: rgba(129, 140, 248, 0.1); }
+
+        /* Textarea */
+        .note-input {
+            width: 100%;
+            background: #1f2230;
+            border: 1px solid #33374a;
+            border-radius: 16px;
+            padding: 16px;
+            color: #ffffff;
+            font-size: 15px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            outline: none;
+            transition: border 0.2s;
+            margin-bottom: 12px;
+        }
+        .note-input:focus { border-color: #818cf8; }
+        .note-input::placeholder { color: #6b7280; }
+
+        /* Note Action Buttons */
+        .note-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .btn-primary {
+            flex: 1;
+            background: #818cf8;
+            color: #ffffff;
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover { background: #6366f1; }
+        .btn-danger {
+            background: #ef4444;
+            color: #ffffff;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-danger:hover { background: #dc2626; }
+
+        /* --- BONUS SECTION (FITUR ASLI) --- */
+        .bonus-section {
+            border-top: 1px solid #252836;
+            padding-top: 24px;
+            margin-bottom: 24px;
+        }
+        .bonus-title {
+            color: #818cf8;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+        .bonus-input {
+            width: 100%;
+            background: #1f2230;
+            border: 1px solid #33374a;
+            border-radius: 12px;
+            padding: 14px 16px;
+            color: #ffffff;
+            font-size: 16px;
+            margin-bottom: 8px;
+            outline: none;
+        }
+        .bonus-input:focus { border-color: #818cf8; }
+        .hint { font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.4; }
+
+        /* --- MAIN ACTIONS (FITUR ASLI) --- */
+        .main-actions {
+            display: flex;
+            gap: 12px;
+            /* Tambahan padding bawah ekstra untuk memastikan aman dari Netlify Badge */
+            padding-bottom: 20px; 
+        }
+        .btn-secondary {
+            flex: 1;
+            background: #252836;
+            color: #ffffff;
+            border: none;
+            padding: 16px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* --- CUSTOM CONFIRM MODAL --- */
+        .confirm-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            backdrop-filter: blur(2px);
+        }
+        .confirm-box {
+            background: #1f2230;
+            padding: 24px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 340px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: popIn 0.2s ease-out;
+        }
+        @keyframes popIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .confirm-box p { margin-bottom: 20px; font-size: 15px; line-height: 1.4; color: #e2e8f0; }
+        .confirm-actions { display: flex; flex-direction: column; gap: 10px; }
+        .confirm-actions button {
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-conf-save { background: #818cf8; color: white; }
+        .btn-conf-new { background: #252836; color: white; }
+        .btn-conf-cancel { background: transparent; color: #8b92a5; }
+
+        /* Hide scrollbar for clean look */
+        .modal-content::-webkit-scrollbar { width: 0px; }
+    </style>
+</head>
+<body>
+
+<!-- Main Bottom Sheet Modal -->
+<div class="modal-overlay" id="mainModal">
+    <div class="modal-content">
+        
+        <!-- Header -->
+        <div class="header">
+            <div class="icon-box">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="title-group">
+                <h2>Olah raga</h2>
+                <p>Wajib · 1 poin · harian</p>
+            </div>
+            <button class="close-btn" onclick="closeModal()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <!-- FITUR ASLI: Centang Progres -->
+        <div class="progress-section" id="progressSection" onclick="toggleProgress()">
+            <div class="custom-checkbox">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <span class="progress-label">Tandai selesai hari ini</span>
+        </div>
+
+        <!-- FITUR BARU: Sistem Multi-Catatan -->
+        <div class="notes-section">
+            <h3 class="section-title">Catatan (opsional)</h3>
+            
+            <!-- Area Daftar Judul Catatan -->
+            <div id="noteListContainer" class="note-list-container"></div>
+            
+            <!-- Tombol Tambah Catatan Baru -->
+            <button id="btnAddNewNote" class="btn-add-small" style="display: none;" onclick="startNewNote()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Tambah catatan baru
+            </button>
+
+            <!-- Input Catatan -->
+            <textarea id="noteInput" class="note-input" placeholder="Catatan, rencana, atau apapun yang ingin kamu tulis..."></textarea>
+
+            <!-- Tombol Aksi Catatan -->
+            <div class="note-actions">
+                <button id="btnDeleteNote" class="btn-danger" style="display: none;" onclick="confirmDelete()">Hapus</button>
+                <button id="btnSaveNote" class="btn-primary" onclick="handleSaveClick()">Simpan</button>
+            </div>
+        </div>
+
+        <!-- FITUR ASLI: Bonus Pahala -->
+        <div class="bonus-section">
+            <h3 class="bonus-title">TAMBAHKAN BONUS PAHALA</h3>
+            <input type="number" class="bonus-input" value="0" placeholder="0">
+            <p class="hint">Misal +5 karena amal istimewa, atau -5 karena kurang sempurna. Kosongkan untuk 0.</p>
+            
+            <div class="main-actions">
+                <button class="btn-secondary" onclick="closeModal()">Kembali</button>
+                <button class="btn-primary">Simpan Semua</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Custom Confirm Modal -->
+<div class="confirm-overlay" id="confirmModal">
+    <div class="confirm-box">
+        <p id="confirmText">Konfirmasi tindakan?</p>
+        <div class="confirm-actions" id="confirmActions">
+            <!-- Buttons injected by JS -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DATABASE SIMULASI (LocalStorage) ---
+    const DB_KEY = 'kompas_notes_olahraga';
+    let notes = JSON.parse(localStorage.getItem(DB_KEY)) || [];
+    let activeNoteId = null; // null = mode tulis baru
+
+    // --- DOM ELEMENTS ---
+    const noteInput = document.getElementById('noteInput');
+    const btnSaveNote = document.getElementById('btnSaveNote');
+    const btnDeleteNote = document.getElementById('btnDeleteNote');
+    const btnAddNewNote = document.getElementById('btnAddNewNote');
+    const noteListContainer = document.getElementById('noteListContainer');
+    const confirmModal = document.getElementById('confirmModal');
+    const confirmText = document.getElementById('confirmText');
+    const confirmActions = document.getElementById('confirmActions');
+
+    // --- FUNGSI UTAMA: RENDER UI CATATAN ---
+    function renderNotesUI() {
+        noteListContainer.innerHTML = '';
+        
+        if (notes.length === 0) {
+            // KONDISI 0: Form kosong, tombol Simpan
+            noteListContainer.style.display = 'none';
+            btnAddNewNote.style.display = 'none';
+            btnDeleteNote.style.display = 'none';
+            noteInput.value = '';
+            btnSaveNote.textContent = 'Simpan';
+            activeNoteId = null;
+            
+        } else if (notes.length === 1) {
+            // KONDISI 1: Langsung isi form, tombol Ubah, ada tombol Tambah & Hapus
+            const singleNote = notes[0];
+            activeNoteId = singleNote.id;
+            noteInput.value = singleNote.content;
+            btnSaveNote.textContent = 'Ubah';
+            btnDeleteNote.style.display = 'block';
+            btnAddNewNote.style.display = 'inline-flex';
+            noteListContainer.style.display = 'none'; 
+            
+        } else {
+            // KONDISI >1: Form kosong, ada list judul, ada tombol Tambah
+            noteListContainer.style.display = 'flex';
+            btnAddNewNote.style.display = 'inline-flex';
+            btnDeleteNote.style.display = 'none'; 
+            noteInput.value = '';
+            btnSaveNote.textContent = 'Simpan';
+            activeNoteId = null;
+
+            notes.forEach(note => {
+                const chip = document.createElement('button');
+                chip.className = 'note-chip';
+                chip.textContent = note.title;
+                chip.onclick = () => selectNote(note.id, chip);
+                noteListContainer.appendChild(chip);
+            });
+        }
+    }
+
+    // --- PILIH CATATAN DARI LIST ---
+    function selectNote(id, chipElement) {
+        activeNoteId = id;
+        const note = notes.find(n => n.id === id);
+        if (note) {
+            noteInput.value = note.content;
+            btnSaveNote.textContent = 'Ubah';
+            btnDeleteNote.style.display = 'block';
+            
+            // Highlight chip aktif
+            document.querySelectorAll('.note-chip').forEach(c => c.classList.remove('active'));
+            if(chipElement) chipElement.classList.add('active');
+        }
+    }
+
+    // --- TOMBOL TAMBAH CATATAN BARU ---
+    function startNewNote() {
+        activeNoteId = null;
+        noteInput.value = '';
+        btnSaveNote.textContent = 'Simpan';
+        btnDeleteNote.style.display = 'none';
+        document.querySelectorAll('.note-chip').forEach(c => c.classList.remove('active'));
+        noteInput.focus();
+    }
+
+    // --- TOMBOL HAPUS ---
+    function confirmDelete() {
+        if (activeNoteId !== null) {
+            showConfirm('Hapus catatan ini secara permanen?', [
+                { text: 'Ya, Hapus', class: 'btn-conf-save', action: () => {
+                    notes = notes.filter(n => n.id !== activeNoteId);
+                    saveToDB();
+                    renderNotesUI();
+                    closeConfirm();
+                }},
+                { text: 'Batal', class: 'btn-conf-cancel', action: closeConfirm }
+            ]);
+        }
+    }
+
+    // --- TOMBOL SIMPAN / UBAH ---
+    function handleSaveClick() {
+        const content = noteInput.value.trim();
+        if (!content) {
+            // Jika kosong dan sedang menghapus/membatalkan, perlakukan sebagai hapus jika ada isinya
+            if(activeNoteId !== null) {
+                confirmDelete();
+            }
+            return; 
+        }
+
+        if (activeNoteId !== null) {
+            // Sedang mengedit catatan lama
+            showConfirm('Apa yang ingin kamu lakukan dengan catatan ini?', [
+                { text: 'Update Catatan Ini', class: 'btn-conf-save', action: () => {
+                    const note = notes.find(n => n.id === activeNoteId);
+                    note.content = content;
+                    saveToDB();
+                    renderNotesUI();
+                    closeConfirm();
+                }},
+                { text: 'Simpan Sebagai Catatan Baru', class: 'btn-conf-new', action: () => {
+                    addNewNoteToDB(content);
+                    closeConfirm();
+                }},
+                { text: 'Batal', class: 'btn-conf-cancel', action: closeConfirm }
+            ]);
+        } else {
+            // Membuat catatan baru langsung
+            showConfirm('Simpan teks ini sebagai catatan baru?', [
+                { text: 'Ya, Simpan', class: 'btn-conf-save', action: () => {
+                    addNewNoteToDB(content);
+                    closeConfirm();
+                }},
+                { text: 'Batal', class: 'btn-conf-cancel', action: closeConfirm }
+            ]);
+        }
+    }
+
+    // --- HELPER: Tambah ke DB ---
+    function addNewNoteToDB(content) {
+        const newId = Date.now();
+        const title = 'Catatan ' + (notes.length + 1); 
+        notes.push({ id: newId, title: title, content: content });
+        saveToDB();
+        renderNotesUI();
+    }
+
+    function saveToDB() {
+        localStorage.setItem(DB_KEY, JSON.stringify(notes));
+    }
+
+    // --- CUSTOM CONFIRM MODAL ---
+    function showConfirm(text, buttons) {
+        confirmText.textContent = text;
+        confirmActions.innerHTML = '';
+        buttons.forEach(btn => {
+            const el = document.createElement('button');
+            el.textContent = btn.text;
+            el.className = btn.class;
+            el.onclick = btn.action;
+            confirmActions.appendChild(el);
+        });
+        confirmModal.style.display = 'flex';
+    }
+
+    function closeConfirm() {
+        confirmModal.style.display = 'none';
+    }
+
+    // --- FITUR ASLI: Toggle Checkbox ---
+    function toggleProgress() {
+        const section = document.getElementById('progressSection');
+        section.classList.toggle('checked');
+    }
+
+    function closeModal() {
+        document.getElementById('mainModal').style.display = 'none';
+    }
+
+    // --- INISIALISASI ---
+    renderNotesUI();
+</script>
+
+</body>
+</html>
